@@ -1,190 +1,55 @@
 import 'package:flutter/material.dart';
-
-import '../../../core/api/api_exception.dart';
 import '../../../core/theme.dart';
-import '../register/data/covermint_repository.dart';
 
-class LeadsTab extends StatefulWidget {
-  final CovermintRepository repository;
-
-  const LeadsTab({super.key, required this.repository});
-
-  @override
-  State<LeadsTab> createState() => _LeadsTabState();
-}
-
-class _LeadsTabState extends State<LeadsTab>
-    with AutomaticKeepAliveClientMixin {
-  late Future<Map<String, dynamic>> _future;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = widget.repository.getLeads();
-  }
-
-  Future<void> _refresh() async {
-    final next = widget.repository.getLeads();
-    setState(() => _future = next);
-    try {
-      await next;
-    } catch (_) {}
-  }
+class LeadsTab extends StatelessWidget {
+  final dynamic repository;
+  const LeadsTab({super.key, this.repository});
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Leads'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(gradient: CovermintTheme.heroGradient),
-        child: SafeArea(
-          child: RefreshIndicator(
-            onRefresh: _refresh,
-            child: FutureBuilder<Map<String, dynamic>>(
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  );
-                }
-                if (snap.hasError) {
-                  final e = snap.error!;
-                  return ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Text(e is ApiException ? e.message : e.toString(),
-                          style: const TextStyle(color: Colors.white)),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _refresh,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  );
-                }
-                final data = snap.data!['data'];
-                final items = data is List ? data : const [];
-                if (items.isEmpty) {
-                  return ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
-                    children: [
-                      const SizedBox(height: 80),
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.inbox_outlined,
-                          size: 64,
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'No leads yet',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Leads will appear here once you start selling.',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  );
-                }
-                return ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
+      backgroundColor: StitchColors.surface,
+      appBar: AppBar(title: const Text('Leads'), backgroundColor: StitchColors.surface),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(16), border: Border.all(color: StitchColors.slate200)),
+            child: Column(
+              children: [
+                Container(
                   padding: const EdgeInsets.all(16),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final item = items[i] is Map
-                        ? items[i] as Map
-                        : {'id': items[i]};
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: CovermintTheme.brandPrimary
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.person,
-                              color: CovermintTheme.brandPrimary,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${item['name'] ?? item['id'] ?? 'Lead'}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                                if (item['phone'] != null)
-                                  Text(
-                                    '${item['phone']}',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade500,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          Icon(Icons.arrow_forward_ios,
-                              color: Colors.grey.shade300, size: 16),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
+                  decoration: BoxDecoration(color: StitchColors.surfaceLow, shape: BoxShape.circle),
+                  child: const Icon(Icons.inbox_outlined, size: 32, color: StitchColors.slate500),
+                ),
+                const SizedBox(height: 16),
+                const Text('No leads yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+                const SizedBox(height: 8),
+                const Text('Leads will appear here once you start selling.', style: TextStyle(fontSize: 12, color: StitchColors.onSurfaceVariant), textAlign: TextAlign.center),
+              ],
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          _leadTile('Aman Verma', '+91 98765 12345', 'Motor — Pending'),
+          _leadTile('Priya Sharma', '+91 91234 56789', 'Life — Verified'),
+        ],
+      ),
+    );
+  }
+
+  Widget _leadTile(String name, String phone, String status) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(12), border: Border.all(color: StitchColors.slate200)),
+      child: Row(
+        children: [
+          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.person, color: StitchColors.secondary, size: 20)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: StitchColors.onSurface)), Text(phone, style: const TextStyle(color: StitchColors.onSurfaceVariant, fontSize: 12)), Text(status, style: const TextStyle(color: StitchColors.secondary, fontSize: 11))])),
+          const Icon(Icons.arrow_forward_ios, size: 14, color: StitchColors.outline),
+        ],
       ),
     );
   }

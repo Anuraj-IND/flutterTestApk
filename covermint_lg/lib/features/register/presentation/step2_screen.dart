@@ -1,873 +1,509 @@
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
-
-import '../../../core/api/api_exception.dart';
 import '../../../core/theme.dart';
-import '../../../core/validators.dart';
-import '../../../shared/widgets/feedback.dart';
-import '../../../shared/widgets/ifsc_field.dart';
-import '../../../shared/widgets/upload_tile.dart';
-import '../data/covermint_repository.dart';
-import 'tos_sheet.dart';
 
-const List<Map<String, String>> _docFields = [
-  {'key': 'aadhaar_front', 'label': 'Aadhaar — Front'},
-  {'key': 'aadhaar_back', 'label': 'Aadhaar — Back'},
-  {'key': 'pan_card', 'label': 'PAN Card'},
-  {'key': 'cheque', 'label': 'Cancelled Cheque'},
-];
-
-class _DocPick {
-  final String path;
-  final String name;
-  final String size;
-  _DocPick({required this.path, required this.name, required this.size});
-}
-
+// Placeholder - no API, just fields and navigation
 class Step2Screen extends StatefulWidget {
-  final CovermintRepository repository;
+  final dynamic repository;
   final String draftId;
-
-  const Step2Screen({
-    super.key,
-    required this.repository,
-    required this.draftId,
-  });
+  const Step2Screen({super.key, this.repository, required this.draftId});
 
   @override
   State<Step2Screen> createState() => _Step2ScreenState();
 }
 
 class _Step2ScreenState extends State<Step2Screen> {
-  final _imagePicker = ImagePicker();
-
-  Map<String, dynamic>? _echo;
-  String? _echoError;
-  bool _loadingEcho = true;
-
-  bool _phoneVerified = false;
-  String _echoName = '';
-  final Set<String> _uploadedDocs = {};
-  bool _tosAccepted = false;
-  String? _tosVersion;
-
-  final _addressAadhaar = TextEditingController();
-  final _pincode = TextEditingController();
-  final _currentAddress = TextEditingController();
-  final _rmName = TextEditingController();
-  final _rmNumber = TextEditingController();
-  final _aadhaarNo = TextEditingController();
-  final _bankName = TextEditingController();
-  final _branch = TextEditingController();
-  final _ifsc = TextEditingController();
-  final _accountNo = TextEditingController();
-  final _bankAddress = TextEditingController();
-
-  bool _saving = false;
-  bool _uploadingDocs = false;
-  bool _submitting = false;
-  bool _verifyingIfsc = false;
-  bool? _ifscValid;
-  String? _ifscMessage;
-
-  final Map<String, _DocPick> _picks = {};
-  String? _banner;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadEcho();
-  }
+  final _pincode = TextEditingController(text: '400053');
+  final _address = TextEditingController(text: 'Flat 402, Greenfield Heights, Andheri West, Mumbai, MH - 400053');
+  final _rmName = TextEditingController(text: 'Vikramaditya Rao');
+  final _rmPhone = TextEditingController(text: '98201 12345');
+  final _ifsc = TextEditingController(text: 'HDFC0000128');
+  final _acc = TextEditingController(text: '50100234891023');
+  final _accRe = TextEditingController(text: '50100234891023');
+  bool _terms = true;
+  bool _ifscValidated = true;
 
   @override
   void dispose() {
-    _addressAadhaar.dispose();
     _pincode.dispose();
-    _currentAddress.dispose();
+    _address.dispose();
     _rmName.dispose();
-    _rmNumber.dispose();
-    _aadhaarNo.dispose();
-    _bankName.dispose();
-    _branch.dispose();
+    _rmPhone.dispose();
     _ifsc.dispose();
-    _accountNo.dispose();
-    _bankAddress.dispose();
+    _acc.dispose();
+    _accRe.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadEcho() async {
-    setState(() {
-      _loadingEcho = true;
-      _echoError = null;
-    });
-    try {
-      final echo = await widget.repository.getDraft(widget.draftId);
-      if (!mounted) return;
-      setState(() {
-        _echo = echo;
-        _phoneVerified = echo['phone_verified'] == true;
-        _echoName = '${echo['name'] ?? ''}';
-        _uploadedDocs
-          ..clear()
-          ..addAll(_docsFromEcho(echo['documents']));
-        final tos = echo['tos'];
-        if (tos is Map) {
-          _tosAccepted = tos['accepted'] == true;
-          _tosVersion =
-              tos['version'] == null ? null : '${tos['version']}';
-        } else if (tos == true) {
-          _tosAccepted = true;
-        }
-        _setIfEmpty(_addressAadhaar, echo['address_aadhaar']);
-        _setIfEmpty(_pincode, echo['pincode']);
-        _setIfEmpty(_currentAddress, echo['current_address']);
-        _setIfEmpty(_rmName, echo['rm_name']);
-        _setIfEmpty(_rmNumber, echo['rm_number'] ?? echo['rm_phone']);
-        _setIfEmpty(_aadhaarNo, echo['aadhaar_no']);
-        final banking = echo['banking'];
-        if (banking is Map) {
-          _setIfEmpty(_bankName, banking['bank_name']);
-          _setIfEmpty(_branch, banking['branch']);
-          _setIfEmpty(_ifsc, banking['ifsc']);
-          _setIfEmpty(_accountNo, banking['account_number']);
-          _setIfEmpty(_bankAddress, banking['bank_address']);
-          if (_ifsc.text.isNotEmpty) {
-            _ifscValid = true;
-            _ifscMessage = 'Saved earlier — re-verified on submit.';
-          }
-        }
-      });
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _echoError = e is ApiException ? e.message : e.toString();
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _loadingEcho = false);
-    }
-  }
-
-  void _setIfEmpty(TextEditingController c, Object? value) {
-    if (c.text.isEmpty && value != null && '$value'.isNotEmpty) {
-      c.text = '$value';
-    }
-  }
-
-  static Set<String> _docsFromEcho(Object? documents) {
-    const known = {'aadhaar_front', 'aadhaar_back', 'pan_card', 'cheque'};
-    if (documents is Map) {
-      return documents.keys.map((e) => '$e').where(known.contains).toSet();
-    }
-    if (documents is List) {
-      final out = <String>{};
-      for (final item in documents) {
-        if (item is String && known.contains(item)) {
-          out.add(item);
-        } else if (item is Map) {
-          for (final key in ['field', 'name', 'doc_type', 'type']) {
-            final v = item[key];
-            if (v is String && known.contains(v)) out.add(v);
-          }
-        }
-      }
-      return out;
-    }
-    return {};
-  }
-
-  Future<void> _verifyIfsc(String ifsc) async {
-    final upper = ifsc.trim().toUpperCase();
-    if (Validators.isDevMode && upper.startsWith('TEST') && upper.length >= 6) {
-      setState(() {
-        _ifscValid = true;
-        _ifscMessage = 'Dev mode: TEST IFSC accepted.';
-        _bankName.text = 'Test Bank';
-        _branch.text = 'Test Branch';
-        _bankAddress.text = 'Test Address, Dev City';
-      });
-      return;
-    }
-    setState(() {
-      _verifyingIfsc = true;
-      _ifscValid = null;
-      _ifscMessage = null;
-    });
-    try {
-      final res = await widget.repository.verifyIfsc(ifsc);
-      if (!mounted) return;
-      final verified = res['verified'] == true;
-      setState(() {
-        _verifyingIfsc = false;
-        _ifscValid = verified;
-        _ifscMessage = verified
-            ? 'Valid IFSC — details autofilled.'
-            : 'Invalid IFSC — check and retry.';
-        if (verified) {
-          _setOrReplace(_bankName, res['bank']);
-          _setOrReplace(_branch, res['branch']);
-          _setOrReplace(_bankAddress, res['address']);
-        }
-      });
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _verifyingIfsc = false;
-          _ifscValid = false;
-          _ifscMessage = e is ApiException ? e.message : 'IFSC check failed.';
-        });
-      }
-    }
-  }
-
-  void _setOrReplace(TextEditingController c, Object? value) {
-    if (value != null && '$value'.isNotEmpty) c.text = '$value';
-  }
-
-  bool get _detailsValid =>
-      Validators.required(_addressAadhaar.text) == null &&
-      Validators.pincode(_pincode.text) == null &&
-      Validators.required(_currentAddress.text, 'Current address') == null &&
-      Validators.required(_bankName.text, 'Bank name') == null &&
-      Validators.ifsc(_ifsc.text) == null &&
-      Validators.required(_accountNo.text, 'Account number') == null;
-
-  Future<void> _saveDetails() async {
-    if (!_detailsValid) {
-      setState(() => _banner = 'Fill address + banking correctly first.');
-      return;
-    }
-    if (_ifscValid != true) {
-      setState(() => _banner = 'Verify the IFSC before saving.');
-      return;
-    }
-    setState(() {
-      _saving = true;
-      _banner = null;
-    });
-    try {
-      await widget.repository.patchDraft(widget.draftId, {
-        'address_aadhaar': _addressAadhaar.text.trim(),
-        'pincode': _pincode.text.trim(),
-        'current_address': _currentAddress.text.trim(),
-        'rm_name': _rmName.text.trim(),
-        'rm_number': _rmNumber.text.trim(),
-        if (_aadhaarNo.text.trim().isNotEmpty)
-          'aadhaar_no': _aadhaarNo.text.trim(),
-        'banking': {
-          'bank_name': _bankName.text.trim(),
-          'branch': _branch.text.trim(),
-          'ifsc': _ifsc.text.trim().toUpperCase(),
-          'account_number': _accountNo.text.trim(),
-          'bank_address': _bankAddress.text.trim(),
-        },
-      });
-      if (mounted) showOk(context, 'Details saved.');
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _pick(
-    String field,
-    Future<String?> Function() picker,
-  ) async {
-    String? path;
-    try {
-      path = await picker();
-    } catch (e) {
-      if (mounted) {
-        showOk(context,
-            'Gallery/camera is unavailable here — use the PDF option.');
-      }
-      return;
-    }
-    if (path == null || path.isEmpty) return;
-    final file = File(path);
-    if (!file.existsSync()) return;
-    final bytes = file.lengthSync();
-    if (bytes > Validators.maxFileBytes) {
-      if (mounted) showOk(context, 'File must be 5 MB or less.');
-      return;
-    }
-    if (!mounted) return;
-    setState(() {
-      _picks[field] = _DocPick(
-        path: path!,
-        name: path.split(Platform.pathSeparator).last,
-        size: _humanSize(bytes),
-      );
-    });
-  }
-
-  static String _humanSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-
-  Future<String?> _pickImage(ImageSource source) async {
-    final x = await _imagePicker.pickImage(source: source, imageQuality: 85);
-    return x?.path;
-  }
-
-  Future<String?> _pickPdf() async {
-    final res = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
-    return res?.files.single.path;
-  }
-
-  Future<void> _uploadDocs() async {
-    if (_picks.isEmpty) {
-      setState(() => _banner = 'Pick at least one document first.');
-      return;
-    }
-    setState(() {
-      _uploadingDocs = true;
-      _banner = null;
-    });
-    try {
-      await widget.repository.uploadDocs(
-        widget.draftId,
-        {for (final e in _picks.entries) e.key: e.value.path},
-      );
-      if (!mounted) return;
-      setState(() {
-        _uploadedDocs.addAll(_picks.keys);
-        _picks.clear();
-      });
-      showOk(context, 'Documents uploaded.');
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => _uploadingDocs = false);
-    }
-  }
-
-  Future<void> _openTos() async {
-    final version = await TosSheet.open(
-      context,
-      repository: widget.repository,
-      draftId: widget.draftId,
-      name: _echoName.isEmpty ? 'Lead Generator' : _echoName,
-    );
-    if (version != null && mounted) {
-      setState(() {
-        _tosAccepted = true;
-        _tosVersion = version;
-      });
-      showOk(context, 'Terms accepted.');
-    }
-  }
-
-  bool get _canSubmit =>
-      _phoneVerified &&
-      _detailsValid &&
-      _ifscValid == true &&
-      _docFields.every((d) => _uploadedDocs.contains(d['key'])) &&
-      _tosAccepted &&
-      !_submitting;
-
-  Future<void> _submit() async {
-    if (!_canSubmit) return;
-    setState(() {
-      _submitting = true;
-      _banner = null;
-    });
-    try {
-      final res = await widget.repository.submit(widget.draftId);
-      if (!mounted) return;
-      final seq = res['lg_seq'];
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: CovermintTheme.approvedGreen),
-              SizedBox(width: 8),
-              Text('Submitted!'),
-            ],
-          ),
-          content: Text(
-            'Your LG-ID is #$seq.\nVerification status: pending.\nPlease log in to continue.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Go to login'),
-            ),
-          ],
-        ),
-      );
-      if (mounted) context.go('/login');
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _banner = e is ApiException ? e.message : e.toString();
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Registration'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: _loadingEcho
-          ? Container(
-              decoration: const BoxDecoration(gradient: CovermintTheme.heroGradient),
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
-            )
-          : _echoError != null
-              ? Container(
-                  decoration: const BoxDecoration(gradient: CovermintTheme.heroGradient),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.error_outline, color: Colors.white, size: 48),
-                        const SizedBox(height: 16),
-                        Text(_echoError!, style: const TextStyle(color: Colors.white)),
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: _loadEcho,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : Container(
-                  decoration: const BoxDecoration(gradient: CovermintTheme.heroGradient),
-                  child: SafeArea(
-                    child: RefreshIndicator(
-                      onRefresh: _loadEcho,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _buildStepIndicator(2, 2),
-                            const SizedBox(height: 20),
-                            if (_banner != null) _buildBanner(),
-                            _buildEchoCard(),
-                            const SizedBox(height: 16),
-                            _buildSectionCard(
-                              title: 'Address & RM',
-                              icon: Icons.location_on_outlined,
-                              children: [
-                                _buildField(
-                                    _addressAadhaar, 'Address as per Aadhaar *',
-                                    maxLines: 2),
-                                const SizedBox(height: 12),
-                                _buildField(_pincode, 'Pincode *',
-                                    keyboardType: TextInputType.number),
-                                const SizedBox(height: 12),
-                                _buildField(
-                                    _currentAddress, 'Current address *',
-                                    maxLines: 2),
-                                const SizedBox(height: 12),
-                                _buildField(_rmName, "RM name"),
-                                const SizedBox(height: 12),
-                                _buildField(_rmNumber, "RM phone",
-                                    keyboardType: TextInputType.phone),
-                                const SizedBox(height: 12),
-                                _buildField(_aadhaarNo, 'Aadhaar number',
-                                    keyboardType: TextInputType.number),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            _buildSectionCard(
-                              title: 'Banking Details',
-                              icon: Icons.account_balance_outlined,
-                              children: [
-                                _buildField(_bankName, 'Bank name *'),
-                                const SizedBox(height: 12),
-                                _buildField(_branch, 'Branch'),
-                                const SizedBox(height: 12),
-                                IfscField(
-                                  controller: _ifsc,
-                                  onVerify: _verifyIfsc,
-                                  verifying: _verifyingIfsc,
-                                  valid: _ifscValid,
-                                  message: _ifscMessage,
-                                ),
-                                const SizedBox(height: 12),
-                                _buildField(_accountNo, 'Account number *',
-                                    keyboardType: TextInputType.number),
-                                const SizedBox(height: 12),
-                                _buildField(_bankAddress, 'Bank address',
-                                    maxLines: 2),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                    onPressed: _saving ? null : _saveDetails,
-                                    icon: _saving
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2),
-                                          )
-                                        : const Icon(Icons.save_outlined),
-                                    label: Text(
-                                        _saving ? 'Saving...' : 'Save Details'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            _buildSectionCard(
-                              title: 'Documents',
-                              subtitle: 'Image or PDF, max 5 MB each',
-                              icon: Icons.folder_outlined,
-                              children: [
-                                ..._docFields.map((d) {
-                                  final key = d['key']!;
-                                  final pick = _picks[key];
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: UploadTile(
-                                      label: d['label']!,
-                                      pickedName: pick?.name,
-                                      pickedSize: pick?.size,
-                                      uploaded: _uploadedDocs.contains(key),
-                                      busy: _uploadingDocs,
-                                      onGallery: () => _pick(
-                                          key,
-                                          () => _pickImage(
-                                              ImageSource.gallery)),
-                                      onCamera: () => _pick(
-                                          key,
-                                          () =>
-                                              _pickImage(ImageSource.camera)),
-                                      onPdf: () => _pick(key, _pickPdf),
-                                    ),
-                                  );
-                                }),
-                                const SizedBox(height: 8),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                    onPressed:
-                                        _uploadingDocs ? null : _uploadDocs,
-                                    icon: _uploadingDocs
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2),
-                                          )
-                                        : const Icon(Icons.cloud_upload_outlined),
-                                    label: Text(_uploadingDocs
-                                        ? 'Uploading...'
-                                        : 'Upload Documents'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            _buildSectionCard(
-                              title: 'Terms of Service',
-                              icon: Icons.gavel_outlined,
-                              children: [
-                                CheckboxListTile(
-                                  value: _tosAccepted,
-                                  onChanged: (_) {
-                                    if (!_tosAccepted) _openTos();
-                                  },
-                                  title: const Text(
-                                      'I accept the Terms of Service'),
-                                  subtitle: _tosVersion == null
-                                      ? null
-                                      : Text('Accepted v$_tosVersion'),
-                                  controlAffinity:
-                                      ListTileControlAffinity.leading,
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-                            _buildSubmitButton(),
-                            const SizedBox(height: 8),
-                            Text(
-                              _gateHint(),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 32),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-    );
-  }
-
-  Widget _buildStepIndicator(int current, int total) {
-    return Row(
-      children: List.generate(total, (i) {
-        final isActive = i < current;
-        return Expanded(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            height: 5,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? CovermintTheme.brandAccent
-                  : Colors.white.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(3),
+      backgroundColor: StitchColors.surface,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            backgroundColor: StitchColors.surface.withValues(alpha: 0.95),
+            elevation: 0,
+            leading: IconButton(icon: const Icon(Icons.arrow_back, color: StitchColors.onSurface), onPressed: () => context.go('/register')),
+            title: Column(
+              children: const [
+                Text('Agent Onboarding', style: TextStyle(fontFamily: 'Plus Jakarta Sans', fontSize: 16, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+                Text('Step 2 of 2 • Final Verification', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+              ],
             ),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildBanner() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: CovermintTheme.rejectedRed.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: CovermintTheme.rejectedRed.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: CovermintTheme.rejectedRed, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(_banner!,
-                style: const TextStyle(color: CovermintTheme.rejectedRed)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEchoCard() {
-    final echo = _echo!;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
+            centerTitle: true,
+            actions: [
               Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: CovermintTheme.brandPrimary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.person, color: CovermintTheme.brandPrimary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Step 1 Details',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-              Icon(
-                _phoneVerified ? Icons.verified : Icons.pending,
-                color: _phoneVerified
-                    ? CovermintTheme.approvedGreen
-                    : CovermintTheme.pendingAmber,
-                size: 20,
+                margin: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: StitchColors.surfaceContainerHighest, borderRadius: BorderRadius.circular(999)),
+                child: Row(children: const [
+                  Icon(Icons.circle, size: 8, color: StitchColors.success),
+                  SizedBox(width: 4),
+                  Text('100% Ready', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+                ]),
               ),
             ],
-          ),
-          const Divider(height: 24),
-          _echoRow('Name', echo['name']),
-          _echoRow('Phone', echo['phone']),
-          _echoRow('Email', echo['email'] ?? echo['mail']),
-          _echoRow('PAN', echo['pan_no'] ?? echo['pan']),
-        ],
-      ),
-    );
-  }
-
-  Widget _echoRow(String label, Object? value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 60,
-            child: Text(label,
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-          ),
-          Expanded(
-            child: Text(
-              '${value ?? '—'}',
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionCard({
-    required String title,
-    required IconData icon,
-    String? subtitle,
-    required List<Widget> children,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: CovermintTheme.brandPrimary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: CovermintTheme.brandPrimary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(36),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: const LinearProgressIndicator(value: 1.0, minHeight: 6, backgroundColor: StitchColors.surfaceContainerHighest, valueColor: AlwaysStoppedAnimation(StitchColors.secondaryContainer)),
                     ),
-                    if (subtitle != null)
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 12,
-                        ),
-                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: const [
+                        Text('Address, Banking & KYC', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: StitchColors.secondary)),
+                        Spacer(),
+                        Text('2 of 2 Complete', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                      ],
+                    ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 16),
-          ...children,
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: StitchColors.surfaceContainer, borderRadius: BorderRadius.circular(12)),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.verified_user, size: 16, color: Color(0xFF314865)),
+                          const SizedBox(width: 6),
+                          const Text('Verified Details from Step 1', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: StitchColors.primary)),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(999)),
+                            child: Row(children: const [Icon(Icons.lock, size: 12, color: StitchColors.onSurfaceVariant), SizedBox(width: 4), Text('Read-only', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant))]),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(child: _summaryItem('Full Legal Name', 'Rajesh Kumar Sharma')),
+                          Expanded(child: _summaryItem('Mobile Number', '+91 98765 43210')),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(child: _summaryItem('Registered Email', 'rajesh.sharma@...in')),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('PAN Number', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                                Row(children: const [
+                                  Text('ABCDE1234F', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface, letterSpacing: 0.8)),
+                                  SizedBox(width: 4),
+                                  Icon(Icons.check_circle, size: 14, color: StitchColors.secondary),
+                                ]),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _sectionCard(
+                  icon: Icons.pin_drop_outlined,
+                  title: 'Address Details',
+                  subtitle: 'Synchronized with Aadhaar eKYC database',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('Pincode *', style: TextStyle(fontSize: 12, color: StitchColors.onSurfaceVariant)),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: StitchColors.surfaceContainerHighest, borderRadius: BorderRadius.circular(999)),
+                            child: Row(children: const [Icon(Icons.location_on, size: 12, color: StitchColors.secondary), SizedBox(width: 4), Text('Mumbai, MH auto-detected', style: TextStyle(fontSize: 11, color: StitchColors.secondary, fontWeight: FontWeight.w600))]),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      _stitchField(controller: _pincode, suffix: const Icon(Icons.check_circle, color: StitchColors.secondary, size: 20)),
+                      const SizedBox(height: 12),
+                      const Text('Permanent Address (as per Aadhaar)', style: TextStyle(fontSize: 12, color: StitchColors.onSurfaceVariant)),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(8), border: Border.all(color: StitchColors.slate200)),
+                        child: TextField(
+                          controller: _address,
+                          maxLines: 2,
+                          style: const TextStyle(fontSize: 14, color: StitchColors.onSurface),
+                          decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(child: _labeledField('Allocated RM Name', _rmName)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('RM Contact No.', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                                const SizedBox(height: 6),
+                                Container(
+                                  height: 44,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(8), border: Border.all(color: StitchColors.slate200)),
+                                  child: Row(
+                                    children: [
+                                      Expanded(child: TextField(controller: _rmPhone, decoration: const InputDecoration(border: InputBorder.none, isDense: true), style: const TextStyle(fontSize: 14))),
+                                      const Icon(Icons.call, size: 16, color: StitchColors.secondary),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _sectionCard(
+                  icon: Icons.account_balance_outlined,
+                  title: 'Banking Details',
+                  subtitle: 'Commission and payout settlement account',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Bank IFSC Code *', style: TextStyle(fontSize: 12, color: StitchColors.onSurfaceVariant)),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(child: _stitchField(controller: _ifsc, hint: 'HDFC0000128')),
+                          const SizedBox(width: 8),
+                          Container(
+                            height: 48,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(color: StitchColors.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)),
+                            child: Row(children: [
+                              const Icon(Icons.verified, size: 16, color: StitchColors.secondary),
+                              const SizedBox(width: 4),
+                              Text(_ifscValidated ? 'Validated' : 'Verify', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: StitchColors.secondary)),
+                            ]),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(12)),
+                        child: Column(
+                          children: [
+                            _bankRow('Bank Name', 'HDFC Bank Ltd', isBold: true),
+                            const SizedBox(height: 6),
+                            _bankRow('Branch', 'Andheri West Branch, Mumbai'),
+                            const SizedBox(height: 6),
+                            _bankRow('Branch Address', 'Plot No. 12, Link Road, Mumbai', isTruncate: true),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Bank Account Number *', style: TextStyle(fontSize: 12, color: StitchColors.onSurfaceVariant)),
+                      const SizedBox(height: 6),
+                      _stitchField(controller: _acc, obscure: true),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: const [
+                          Text('Re-enter Account Number *', style: TextStyle(fontSize: 12, color: StitchColors.onSurfaceVariant)),
+                          Spacer(),
+                          Icon(Icons.check, size: 12, color: StitchColors.secondary),
+                          SizedBox(width: 4),
+                          Text('Matching', style: TextStyle(fontSize: 11, color: StitchColors.secondary, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Stack(
+                        alignment: Alignment.centerRight,
+                        children: [
+                          _stitchField(controller: _accRe),
+                          const Padding(padding: EdgeInsets.only(right: 12), child: Icon(Icons.task_alt, color: StitchColors.secondary, size: 20)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _sectionCard(
+                  icon: Icons.file_present_outlined,
+                  title: 'Upload Documents',
+                  subtitle: 'Original scans required for IRDAI approval',
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: StitchColors.surfaceContainerHighest, borderRadius: BorderRadius.circular(999)),
+                    child: const Text('4/4 Attached', style: TextStyle(fontSize: 11, color: StitchColors.secondary, fontWeight: FontWeight.w600)),
+                  ),
+                  child: GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 0.92,
+                    children: [
+                      _docTile('Aadhaar (Front)', 'aadhaar_front.jpg', 'https://lh3.googleusercontent.com/aida-public/AB6AXuAttP8BmWiRli1aYJGI4YcildJyzhAU5rWnVeVyBQ_r0aRmty4TJgANX4D6-9bcxtn5pPgvZIRhRfQNmHYXCaB7bnPsa9bCso7wuXymLmJeu90wQd_jXb8JcG8KWLglWwrvvdDl1kaRmJN_-zjKDWxULLocj0GUqrPlmPqU1ic8rB_6I3F8wMgtnLGLquBSmokMrpdO2Eyw2GhCHUgnBoD6Cf2LFeRXUElldY3SZwsIbuGY33V6Dfm9'),
+                      _docTile('Aadhaar (Back)', 'aadhaar_back.jpg', 'https://lh3.googleusercontent.com/aida-public/AB6AXuC0pZlkwbsi4mr884B289tpXCRcV7fhm-15cjXkyX6ag6MG9XTx8i2xnQJw0GaY08KGsy446VHBibY09vcUnOeUGli4Z-6gFrYGqx7KVqx1SBo5ERqWewWGE9fwn7AOLBZePbzLIS58iGPcR7zsYLxCrI6hFPZcYcw4kTqdH5hYYzWIbCQu4qHtnUlDiL9b5ZE-aSWck3AEsrSGu8vtDaPg1gL2tb8QWeM_vCbTz8HTgffHLtNimvcS'),
+                      _docTile('PAN Card', 'pan_card_reg.pdf', 'https://lh3.googleusercontent.com/aida-public/AB6AXuAporBTdEIuOHLGP78MOFNd0hueWtl_hcJjh53WeTs4bZ_GZWLgVlwfv6phbK0BFR-rwODe8MRAPzYf_CpG-RogKPKtInU6ou5EhKBBAlXnOuOo_zPNcbn7VNNuKZroLU4nJAaFHOx02DFuWpTeZ3vjKWqVQZ_Kt-PGcPOl_wAXs4ip6LOMmMdsbyd4LZ6WhhNplGmmvhsdx_r7KtVh_ICSulQUwh_e9ee6Ky3ZcxkIz77NFzqgbEGN'),
+                      _docTile('Cancelled Cheque', 'hdfc_cheque.jpg', 'https://lh3.googleusercontent.com/aida-public/AB6AXuBpkyDUf-As156qGU6pE7YO_6pojeMBon7MN2tP6nEa7kaEh4ASPzKBZ6O4EcSa0fxjfgTaxou2q-yYg031kXU3iRZdAeJcoxNzNLANiGhnEzUc8ZbZzJeYTZYgNlzN9mjDAbrGZD5TH1__wFOXRfTj-us-GU8HLl0BSg9omHMTOSKlpn_jOTTHocRDMiRu7vIq9UtBn-yciPRXowkWGAtKC-vbkdcyhBlkcvY7O_1903SN2sGAQC70'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(12), border: Border.all(color: StitchColors.slate200), boxShadow: const [BoxShadow(color: Color(0x0A0F172A), blurRadius: 8)]),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.gavel_outlined, size: 20, color: StitchColors.secondary),
+                          const SizedBox(width: 8),
+                          const Text('Terms & Agent Code of Conduct', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+                          const Spacer(),
+                          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: StitchColors.surfaceContainerHigh, borderRadius: BorderRadius.circular(999)), child: const Text('v2.4 (2024)', style: TextStyle(fontSize: 10, color: StitchColors.onSurface))),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(8)),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.verified, size: 16, color: StitchColors.secondary),
+                            SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Rajesh Kumar Sharma', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+                                Text('Timestamp: 24 Oct 2024, 02:45 PM IST', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        height: 112,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(8)),
+                        child: const SingleChildScrollView(
+                          child: Text(
+                            '1. Representation: The Agent undertakes to act in strict compliance with the statutory regulations laid down by IRDAI and corporate compliance charters.\n\n2. Disclosure of Commissions: All incentives, fees, and payout splits are dynamically bound to certified policy closures.\n\n3. Data Confidentiality: No customer data shall be stored on unauthorized media.\n\n4. Termination: Any breach triggers immediate deactivation.',
+                            style: TextStyle(fontSize: 11, height: 1.4, color: StitchColors.onSurfaceVariant),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      InkWell(
+                        onTap: () => setState(() => _terms = !_terms),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: _terms ? StitchColors.primary : Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: _terms ? StitchColors.primary : StitchColors.slate200),
+                              ),
+                              child: _terms ? const Icon(Icons.check, size: 12, color: Colors.white) : null,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'I declare that the information and bank documents provided are true and correct. I agree to the Terms & Conditions and Agent Code of Conduct.',
+                                style: TextStyle(fontSize: 12, color: StitchColors.onSurface, height: 1.3),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 48,
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _terms ? () => context.go('/dashboard') : null,
+                    style: FilledButton.styleFrom(backgroundColor: StitchColors.primary, disabledBackgroundColor: StitchColors.slate200),
+                    icon: const Icon(Icons.shield, size: 18),
+                    label: const Text('Complete Registration & Launch Dashboard'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.lock, size: 12, color: StitchColors.onSurfaceVariant),
+                    SizedBox(width: 4),
+                    Text('256-bit encrypted IRDAI agency application submission', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                  ],
+                ),
+              ]),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildField(
-    TextEditingController controller,
-    String label, {
-    int maxLines = 1,
-    TextInputType? keyboardType,
-  }) {
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(labelText: label),
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-    );
+  Widget _summaryItem(String label, String value) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+      const SizedBox(height: 2),
+      Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: StitchColors.onSurface), overflow: TextOverflow.ellipsis),
+    ]);
   }
 
-  Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: FilledButton.icon(
-        onPressed: _canSubmit ? _submit : null,
-        icon: _submitting
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(Icons.send),
-        label: Text(_submitting ? 'Submitting...' : 'Submit Registration'),
-        style: FilledButton.styleFrom(
-          backgroundColor: _canSubmit
-              ? CovermintTheme.brandAccent
-              : Colors.grey.shade400,
-          disabledBackgroundColor: Colors.grey.shade300,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+  Widget _sectionCard({required IconData icon, required String title, String? subtitle, Widget? trailing, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(12), border: Border.all(color: StitchColors.slate200), boxShadow: const [BoxShadow(color: Color(0x0A0F172A), blurRadius: 6)]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 32, height: 32, decoration: BoxDecoration(color: StitchColors.surfaceContainerHigh, borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 18, color: StitchColors.secondary)),
+              const SizedBox(width: 8),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface)), if (subtitle != null) Text(subtitle, style: const TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant))])),
+              if (trailing != null) trailing,
+            ],
           ),
-        ),
+          const SizedBox(height: 16),
+          child,
+        ],
       ),
     );
   }
 
-  String _gateHint() {
-    final missing = <String>[];
-    if (!_phoneVerified) missing.add('phone verification');
-    if (!_detailsValid) missing.add('address + banking');
-    if (_ifscValid != true) missing.add('IFSC verify');
-    final missingDocs = _docFields
-        .where((d) => !_uploadedDocs.contains(d['key']))
-        .map((d) => d['label']!);
-    if (missingDocs.isNotEmpty) {
-      missing.add('docs: ${missingDocs.join(', ')}');
-    }
-    if (!_tosAccepted) missing.add('TOS');
-    if (missing.isEmpty) return 'All gates clear — ready to submit.';
-    return 'Still needed: ${missing.join(' · ')}.';
+  Widget _stitchField({required TextEditingController controller, String? hint, bool obscure = false, Widget? suffix}) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(8), border: Border.all(color: StitchColors.slate200)),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              obscureText: obscure,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: StitchColors.onSurface, letterSpacing: 0.5),
+              decoration: InputDecoration(border: InputBorder.none, hintText: hint, isDense: true, hintStyle: const TextStyle(color: StitchColors.outline)),
+            ),
+          ),
+          if (suffix != null) suffix,
+        ],
+      ),
+    );
+  }
+
+  Widget _labeledField(String label, TextEditingController c) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+      const SizedBox(height: 6),
+      _stitchField(controller: c),
+    ]);
+  }
+
+  Widget _bankRow(String label, String value, {bool isBold = false, bool isTruncate = false}) {
+    return Row(children: [
+      Text(label, style: const TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+      const Spacer(),
+      SizedBox(
+        width: 180,
+        child: Text(value, textAlign: TextAlign.right, overflow: isTruncate ? TextOverflow.ellipsis : TextOverflow.visible, style: TextStyle(fontSize: isBold ? 13 : 12, fontWeight: isBold ? FontWeight.w600 : FontWeight.w400, color: isBold ? StitchColors.primary : StitchColors.onSurface)),
+      ),
+    ]);
+  }
+
+  Widget _docTile(String title, String file, String url) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(url, fit: BoxFit.cover, width: double.infinity, errorBuilder: (_, __, ___) => Container(color: StitchColors.surfaceContainerHigh, child: const Icon(Icons.image, color: StitchColors.slate500))),
+                ),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: const BoxDecoration(color: StitchColors.secondaryContainer, shape: BoxShape.circle),
+                    child: const Icon(Icons.check, size: 14, color: StitchColors.onSecondaryFixedVariant),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: StitchColors.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(file, style: const TextStyle(fontSize: 10, color: StitchColors.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            height: 26,
+            child: OutlinedButton(onPressed: () {}, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, backgroundColor: StitchColors.surfaceContainer, side: BorderSide.none, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text('Re-upload', style: TextStyle(fontSize: 11, color: StitchColors.secondary))),
+          ),
+        ],
+      ),
+    );
   }
 }

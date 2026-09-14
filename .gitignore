@@ -1,0 +1,51 @@
+# ─── Build Artifacts ────────────────────────────────────────
+**/build/
+*.apk
+*.aab
+*.ipa
+*.app
+
+# ─── Flutter ────────────────────────────────────────────────
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+
+# ─── Gradle ─────────────────────────────────────────────────
+**/.gradle/
+**/gradle/wrapper/gradle-wrapper.jar
+
+# ─── IDE ────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.swiftpm/
+
+# ─── OS ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.pyc
+*.log
+
+# ─── Local / Temp ───────────────────────────────────────────
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/migrate_working_dir/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+app.*.symbols
+app.*.map.json
+
+# ─── Stitch design export (large HTML/PNGs — keep out) ──────
+stitch_insurance_lead_generator_app/
+
+# ─── Secrets / keys (never commit) ─────────────────────────
+*.jks
+*.keystore
+*.p12

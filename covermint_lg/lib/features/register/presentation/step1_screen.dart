@@ -1,32 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-
 import '../../../core/theme.dart';
-import '../../../core/validators.dart';
-import '../../../shared/widgets/feedback.dart';
 import '../data/covermint_repository.dart';
 
 class Step1Screen extends StatefulWidget {
-  final CovermintRepository repository;
-
-  const Step1Screen({super.key, required this.repository});
+  final CovermintRepository? repository;
+  const Step1Screen({super.key, this.repository});
 
   @override
   State<Step1Screen> createState() => _Step1ScreenState();
 }
 
 class _Step1ScreenState extends State<Step1Screen> {
-  final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _phone = TextEditingController();
-  final _email = TextEditingController();
-  final _pan = TextEditingController();
-  final _otp = TextEditingController();
+  final _name = TextEditingController(text: 'Rajesh Kumar Sharma');
+  final _phone = TextEditingController(text: '9876543210');
+  final _email = TextEditingController(text: 'rajesh.sharma@insurancepartners.in');
+  final _pan = TextEditingController(text: 'ABCDE1234F');
+  final List<TextEditingController> _otpCtrls = List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _otpNodes = List.generate(6, (_) => FocusNode());
 
-  bool _otpSent = false;
-  bool _otpVerified = false;
-  bool _busy = false;
+  bool _otpSent = true;
+  bool _phoneVerified = true;
+  int _resendSec = 28;
+
+  @override
+  void initState() {
+    super.initState();
+    _otpCtrls[0].text = '4';
+    _otpCtrls[1].text = '8';
+    _otpCtrls[2].text = '2';
+    _otpCtrls[3].text = '9';
+    _otpCtrls[4].text = '1';
+    _otpCtrls[5].text = '6';
+  }
 
   @override
   void dispose() {
@@ -34,408 +41,404 @@ class _Step1ScreenState extends State<Step1Screen> {
     _phone.dispose();
     _email.dispose();
     _pan.dispose();
-    _otp.dispose();
+    for (final c in _otpCtrls) c.dispose();
+    for (final n in _otpNodes) n.dispose();
     super.dispose();
   }
 
-  bool get _formValid =>
-      Validators.name(_name.text) == null &&
-      Validators.phone(_phone.text) == null &&
-      Validators.email(_email.text) == null &&
-      Validators.pan(_pan.text) == null;
-
-  Future<void> _sendOtp() async {
-    if (Validators.phone(_phone.text) != null) {
-      showOk(context, 'Enter a valid 10-digit mobile number first.');
-      return;
-    }
-    setState(() => _busy = true);
-    try {
-      await widget.repository.otpSend(phone: _phone.text, purpose: 'register');
-      if (mounted) {
-        setState(() {
-          _otpSent = true;
-          _otpVerified = false;
-        });
-        showOk(context, 'OTP sent. Dev mode OTP is 123456.');
-      }
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+  void _onOtpChanged(String v, int idx) {
+    if (v.isNotEmpty && idx < 5) _otpNodes[idx + 1].requestFocus();
+    if (v.isEmpty && idx > 0) _otpNodes[idx - 1].requestFocus();
+    setState(() {});
   }
 
-  Future<void> _verifyOtp() async {
-    if (_otp.text.trim().isEmpty) {
-      showOk(context, 'Enter the OTP first.');
-      return;
-    }
-    setState(() => _busy = true);
-    try {
-      await widget.repository.otpVerify(
-        phone: _phone.text,
-        otp: _otp.text,
-        purpose: 'register',
-      );
-      if (mounted) {
-        setState(() => _otpVerified = true);
-        showOk(context, 'Phone verified.');
-      }
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _next() async {
-    if (!_formValid || !_otpVerified) return;
-    setState(() => _busy = true);
-    try {
-      final draftId = await widget.repository.registerInit(
-        name: _name.text,
-        phone: _phone.text,
-        email: _email.text,
-        panNo: _pan.text,
-      );
-      if (mounted) context.go('/register/$draftId');
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+  bool get _canProceed {
+    final otp = _otpCtrls.map((c) => c.text).join();
+    return _name.text.trim().isNotEmpty &&
+        _phone.text.trim().length == 10 &&
+        otp.length == 6 &&
+        _email.text.contains('@') &&
+        _pan.text.length == 10;
   }
 
   @override
   Widget build(BuildContext context) {
-    final canProceed = _formValid && _otpVerified && !_busy;
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      backgroundColor: StitchColors.surface,
       appBar: AppBar(
-        title: const Text('Registration'),
-        backgroundColor: Colors.transparent,
+        backgroundColor: StitchColors.surface,
         elevation: 0,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: CovermintTheme.heroGradient,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: StitchColors.onSurface),
+          onPressed: () => context.go('/welcome'),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              onChanged: () => setState(() {}),
+        title: const Text('Agent Onboarding', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+        centerTitle: true,
+        actions: const [Padding(padding: EdgeInsets.only(right: 16), child: Icon(Icons.verified_user_outlined, color: StitchColors.secondary, size: 22))],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: StitchColors.surfaceLowest,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: StitchColors.slate200),
+                boxShadow: const [BoxShadow(color: Color(0x0A0F172A), blurRadius: 4)],
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildStepIndicator(1, 2),
-                  const SizedBox(height: 24),
-                  _buildGlassCard(
+                  Row(
+                    children: const [
+                      Text('STEP 1 OF 2', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8, color: StitchColors.secondary)),
+                      SizedBox(width: 6),
+                      Icon(Icons.circle, size: 4, color: StitchColors.outlineVariant),
+                      SizedBox(width: 6),
+                      Text('Personal Details', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: StitchColors.onSurface)),
+                      Spacer(),
+                      Text('50%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: StitchColors.onSurfaceVariant)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: 0.5,
+                      minHeight: 8,
+                      backgroundColor: StitchColors.surfaceContainerHigh,
+                      valueColor: const AlwaysStoppedAnimation(StitchColors.secondaryContainer),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF0A2540), Color(0xFF004666)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildSectionTitle('Personal Information'),
-                        const SizedBox(height: 16),
-                        _buildAnimatedField(
-                          delay: 0,
-                          child: _buildTextField(
-                            controller: _name,
-                            label: 'Full Name',
-                            icon: Icons.person_outline,
-                            textCapitalization: TextCapitalization.words,
-                            validator: Validators.name,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildAnimatedField(
-                          delay: 100,
-                          child: _buildPhoneRow(),
-                        ),
-                        if (_otpSent) ...[
-                          const SizedBox(height: 12),
-                          _buildAnimatedField(
-                            delay: 150,
-                            child: _buildOtpRow(),
-                          ),
-                        ],
-                        if (_otpVerified) ...[
-                          const SizedBox(height: 8),
-                          _buildVerifiedBadge(),
-                        ],
-                        const SizedBox(height: 12),
-                        _buildAnimatedField(
-                          delay: 200,
-                          child: _buildTextField(
-                            controller: _email,
-                            label: 'Email Address',
-                            icon: Icons.email_outlined,
-                            keyboardType: TextInputType.emailAddress,
-                            validator: Validators.email,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildAnimatedField(
-                          delay: 300,
-                          child: _buildTextField(
-                            controller: _pan,
-                            label: 'PAN Number',
-                            icon: Icons.credit_card,
-                            textCapitalization: TextCapitalization.characters,
-                            validator: Validators.pan,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                  RegExp(r'[A-Za-z0-9]')),
-                              LengthLimitingTextInputFormatter(10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: StitchColors.secondaryContainer.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(999)),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.bolt, size: 12, color: StitchColors.tertiaryFixed),
+                              SizedBox(width: 4),
+                              Text('Fast-Track KYC', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: StitchColors.tertiaryFixed)),
                             ],
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        const Text('Create your LG Account', style: TextStyle(fontFamily: 'Plus Jakarta Sans', fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+                        const SizedBox(height: 4),
+                        const Text('Enter your primary KYC identification details', style: TextStyle(fontSize: 12, color: Color(0xFFB0C8EB))),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  _buildNextButton(canProceed),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: TextButton(
-                      onPressed: _busy ? null : () => context.go('/login'),
-                      child: Text(
-                        'Already registered? Log in',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                        ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: StitchColors.surfaceContainer,
+                      border: Border.all(color: Colors.white24),
+                      image: const DecorationImage(
+                        image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuDjzAkE2xbSqlrtHhbKnhoV11QAToHAjAMRCL_AChj8iaE3402eTH9gBbNq9Wy_NIWkZAxroALkHpSZwnQN5wSYU5udd9ErFYfVTRZaXYaOT8-azyt9EPktwKnweJZu0F8v-2lkQXA2kqsivHGg381hv_0nB6VWNPE4TbGH71jEbDt2s4-sbCkEMvow6rS-NvWDpAIwx87knCgx9PW6Tz1KOtavLBs0zih1Yc_ckb4gICrYoNyryZ5n'),
+                        fit: BoxFit.cover,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStepIndicator(int current, int total) {
-    return Row(
-      children: List.generate(total, (i) {
-        final isActive = i < current;
-        final isCurrent = i == current - 1;
-        return Expanded(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            height: 5,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? CovermintTheme.brandAccent
-                  : Colors.white.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(3),
+            const SizedBox(height: 16),
+            _fieldCard(
+              label: 'Full Name (As per PAN card)',
+              trailing: _verifiedPill('Verified'),
+              child: _inputRow(
+                icon: Icons.badge_outlined,
+                controller: _name,
+                hint: 'Enter legal full name',
+                onChanged: (_) => setState(() {}),
+                trailing: const Icon(Icons.verified, color: StitchColors.success, size: 20),
+              ),
             ),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildGlassCard({required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: CovermintTheme.brandDark,
-      ),
-    );
-  }
-
-  Widget _buildAnimatedField({required int delay, required Widget child}) {
-    return AnimatedOpacity(
-      opacity: 1,
-      duration: Duration(milliseconds: 400 + delay),
-      child: child,
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    String? hintText,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-    TextCapitalization? textCapitalization,
-    List<TextInputFormatter>? inputFormatters,
-  }) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hintText,
-        prefixIcon: Icon(icon, size: 20),
-      ),
-      keyboardType: keyboardType,
-      textCapitalization: textCapitalization ?? TextCapitalization.none,
-      inputFormatters: inputFormatters,
-      validator: validator,
-      style: const TextStyle(fontSize: 15),
-    );
-  }
-
-  Widget _buildPhoneRow() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: TextFormField(
-            controller: _phone,
-            decoration: const InputDecoration(
-              labelText: 'Mobile Number',
-              hintText: '10-digit, starts 6-9',
-              prefixIcon: Icon(Icons.phone_outlined, size: 20),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(12), border: Border.all(color: StitchColors.slate200)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Text('Mobile Phone Number', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: StitchColors.onSurfaceVariant)),
+                      Spacer(),
+                      Text('SMS Verification', style: TextStyle(fontSize: 11, color: StitchColors.secondary, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 48,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(8), border: Border.all(color: StitchColors.slate200)),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.smartphone, size: 18, color: StitchColors.secondary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: _phone,
+                                  keyboardType: TextInputType.phone,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+                                  decoration: const InputDecoration(border: InputBorder.none, hintText: '10-digit number', isDense: true),
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        height: 36,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(color: StitchColors.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)),
+                        child: const Center(child: Text('OTP Sent', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: StitchColors.onSecondaryFixedVariant))),
+                      ),
+                    ],
+                  ),
+                  if (_otpSent) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: StitchColors.surfaceLow.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(12)),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              const Text('Enter 6-digit OTP sent to your mobile', style: TextStyle(fontSize: 11, color: StitchColors.onSurface)),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(999), boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 4)]),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check, size: 12, color: StitchColors.success),
+                                    const SizedBox(width: 4),
+                                    Text(_phoneVerified ? 'Verified ✓' : 'Verify', style: const TextStyle(fontSize: 11, color: StitchColors.success, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: List.generate(6, (i) {
+                              return SizedBox(
+                                width: 44,
+                                height: 48,
+                                child: TextField(
+                                  controller: _otpCtrls[i],
+                                  focusNode: _otpNodes[i],
+                                  textAlign: TextAlign.center,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(1)],
+                                  style: const TextStyle(fontFamily: 'Plus Jakarta Sans', fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF001C37)),
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: StitchColors.surfaceLowest,
+                                    contentPadding: EdgeInsets.zero,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: StitchColors.secondary, width: 1.5)),
+                                  ),
+                                  onChanged: (v) => _onOtpChanged(v, i),
+                                ),
+                              );
+                            }),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.schedule, size: 14, color: StitchColors.onSurfaceVariant),
+                              const SizedBox(width: 4),
+                              Text('Resend OTP in 00:${_resendSec.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                              const Spacer(),
+                              GestureDetector(onTap: () => setState(() => _resendSec = 28), child: const Text('Change Number', style: TextStyle(fontSize: 11, color: StitchColors.secondary))),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            validator: Validators.phone,
-            onChanged: (_) {
-              if (_otpSent) {
-                setState(() {
-                  _otpSent = false;
-                  _otpVerified = false;
-                });
-              }
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: FilledButton.icon(
-            onPressed: _busy ? null : _sendOtp,
-            icon: Icon(_otpSent ? Icons.refresh : Icons.send, size: 18),
-            label: Text(_otpSent ? 'Resend' : 'Send OTP'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 52),
-              backgroundColor:
-                  _otpSent ? CovermintTheme.brandAccent : CovermintTheme.brandPrimary,
+            const SizedBox(height: 12),
+            _fieldCard(
+              label: 'Official Email Address',
+              trailing: _verifiedPill('Verified'),
+              child: _inputRow(
+                icon: Icons.mail_outline,
+                controller: _email,
+                hint: 'agent.name@domain.com',
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (_) => setState(() {}),
+                trailing: const Icon(Icons.verified, color: StitchColors.success, size: 20),
+              ),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOtpRow() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _otp,
-            decoration: const InputDecoration(
-              labelText: 'Enter OTP',
-              hintText: 'Dev OTP: 123456',
-              prefixIcon: Icon(Icons.lock_outline, size: 20),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(12), border: Border.all(color: StitchColors.slate200)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Permanent Account Number (PAN)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: StitchColors.onSurfaceVariant)),
+                      const Spacer(),
+                      _verifiedPill('Valid Format'),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _inputRow(
+                    icon: Icons.credit_card_outlined,
+                    controller: _pan,
+                    hint: 'ABCDE1234F',
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')), LengthLimitingTextInputFormatter(10)],
+                    onChanged: (_) => setState(() {}),
+                    trailing: const Icon(Icons.check_circle, color: StitchColors.success, size: 20),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: const [
+                      Icon(Icons.info_outline, size: 12, color: StitchColors.onSurfaceVariant),
+                      SizedBox(width: 4),
+                      Text('Format: 5 letters, 4 numbers, 1 letter', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(6),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: FilledButton.icon(
-            onPressed: _busy ? null : _verifyOtp,
-            icon: const Icon(Icons.check, size: 18),
-            label: const Text('Verify'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 52),
-              backgroundColor: CovermintTheme.approvedGreen,
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(color: StitchColors.secondaryContainer.withValues(alpha: 0.3), shape: BoxShape.circle),
+                    child: const Icon(Icons.lock_outline, size: 20, color: StitchColors.onSecondaryFixedVariant),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('IRDAI Regulatory Protection', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+                        SizedBox(height: 2),
+                        Text('Your identification credentials are encrypted under 256-bit SSL banking standards.', style: TextStyle(fontSize: 12, color: StitchColors.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVerifiedBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: CovermintTheme.approvedGreen.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: CovermintTheme.approvedGreen.withValues(alpha: 0.3),
-        ),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.check_circle, color: CovermintTheme.approvedGreen, size: 18),
-          SizedBox(width: 8),
-          Text(
-            'Phone verified',
-            style: TextStyle(
-              color: CovermintTheme.approvedGreen,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNextButton(bool canProceed) {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: FilledButton.icon(
-        onPressed: canProceed ? _next : null,
-        icon: _busy
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                onPressed: _canProceed ? () => context.go('/register/placeholder') : null,
+                style: FilledButton.styleFrom(backgroundColor: StitchColors.primary, disabledBackgroundColor: StitchColors.slate200),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Text('Next — Step 2', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    SizedBox(width: 8),
+                    Icon(Icons.arrow_forward, size: 18),
+                  ],
                 ),
-              )
-            : const Icon(Icons.arrow_forward),
-        label: Text(_busy ? 'Processing...' : 'Continue to Step 2'),
-        style: FilledButton.styleFrom(
-          backgroundColor: canProceed
-              ? CovermintTheme.brandAccent
-              : Colors.grey.shade400,
-          disabledBackgroundColor: Colors.grey.shade300,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.shield_outlined, size: 14, color: StitchColors.secondary),
+                SizedBox(width: 6),
+                Text('Your information is encrypted with 256-bit SSL encryption.', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+              ],
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _fieldCard({required String label, required Widget trailing, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(12), border: Border.all(color: StitchColors.slate200)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: StitchColors.onSurfaceVariant)), const Spacer(), trailing]),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _verifiedPill(String text) {
+    return Row(children: [const Icon(Icons.check_circle, size: 14, color: StitchColors.success), const SizedBox(width: 4), Text(text, style: const TextStyle(fontSize: 11, color: StitchColors.success, fontWeight: FontWeight.w500))]);
+  }
+
+  Widget _inputRow({required IconData icon, required TextEditingController controller, String? hint, TextInputType? keyboardType, TextCapitalization? textCapitalization, List<TextInputFormatter>? inputFormatters, ValueChanged<String>? onChanged, Widget? trailing}) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(8), border: Border.all(color: StitchColors.slate200)),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: StitchColors.secondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: keyboardType,
+              textCapitalization: textCapitalization ?? TextCapitalization.none,
+              inputFormatters: inputFormatters,
+              onChanged: onChanged,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface),
+              decoration: InputDecoration(border: InputBorder.none, hintText: hint, hintStyle: const TextStyle(color: StitchColors.outline, fontSize: 14), isDense: true),
+            ),
+          ),
+          if (trailing != null) trailing,
+        ],
       ),
     );
   }

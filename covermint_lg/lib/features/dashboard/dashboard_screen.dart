@@ -1,332 +1,286 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-
-import '../../../core/api/api_exception.dart';
-import '../../../core/auth/auth_state.dart';
 import '../../../core/theme.dart';
-import '../register/data/covermint_repository.dart';
 
 class DashboardScreen extends StatefulWidget {
-  final CovermintRepository repository;
-  final AuthState authState;
-
-  const DashboardScreen({
-    super.key,
-    required this.repository,
-    required this.authState,
-  });
+  final dynamic repository;
+  final dynamic authState;
+  const DashboardScreen({super.key, this.repository, this.authState});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  late Future<Map<String, dynamic>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = widget.repository.getDashboard();
-  }
-
-  Future<void> _refresh() async {
-    final next = widget.repository.getDashboard();
-    setState(() => _future = next);
-    await next;
-  }
-
-  Future<void> _logout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Log out?'),
-        content: const Text('Your saved session on this device will be cleared.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Log out'),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await widget.authState.logout();
-    }
-  }
+  bool _masked = true;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: 'Log out',
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: FutureBuilder<Map<String, dynamic>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return Container(
-                decoration: const BoxDecoration(gradient: CovermintTheme.heroGradient),
-                child: const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
+      backgroundColor: StitchColors.surface,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Stack(
+                      children: [
+                        const CircleAvatar(
+                          radius: 24,
+                          backgroundImage: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuDuCLgcGmFX8VlVY0yVX8gW09AeqImUR4yydV1nwxrwtTiyZNbOorycUJSHItZJT-6rhOvk-mPZovCpls-aPKWet0HzjA3ZH5ZZ9_GkO3PQYAwIwpfx1cN1_3ki_1QRvVfLcCqqi7AOSpW5HkuDBGHL-ZEg58VK0UmqAvSoP_T_PVuaOGjVIFJtarMT2PUmyM0zgOssQvPBZrouUZUNbXxX1GRYt2nlf4Sq-2LxyY0QaUtvibLfK_Lh'),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(color: StitchColors.success, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text('Hi, Rajesh', style: TextStyle(fontFamily: 'Plus Jakarta Sans', fontSize: 18, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+                              SizedBox(width: 4),
+                              Icon(Icons.verified, size: 16, color: StitchColors.secondary),
+                            ],
+                          ),
+                          Text('Mumbai Central Hub • Senior LG', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                        ],
+                      ),
+                    ),
+                    Stack(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(color: StitchColors.surfaceContainerLow, shape: BoxShape.circle),
+                          child: const Icon(Icons.notifications_outlined, color: StitchColors.primary),
+                        ),
+                        Positioned(
+                          right: 6,
+                          top: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(color: StitchColors.error, borderRadius: BorderRadius.circular(999)),
+                            child: const Text('3', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              );
-            }
-            if (snap.hasError) {
-              final e = snap.error!;
-              return Container(
-                decoration: const BoxDecoration(gradient: CovermintTheme.heroGradient),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF0A2540), Color(0xFF0D3B66), Color(0xFF004C6E)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [BoxShadow(color: Color(0x330A2540), blurRadius: 20, offset: Offset(0, 8))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      const Icon(Icons.error_outline, color: Colors.white, size: 48),
-                      const SizedBox(height: 16),
-                      Text(e is ApiException ? e.message : e.toString(),
-                          style: const TextStyle(color: Colors.white)),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _refresh,
-                        child: const Text('Retry'),
+                      const Text('FIELD IDENTITY PASS', style: TextStyle(fontSize: 11, letterSpacing: 0.8, color: StitchColors.secondaryFixed, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(999)),
+                        child: Row(children: const [
+                          Icon(Icons.circle, size: 8, color: StitchColors.tertiaryFixedDim),
+                          SizedBox(width: 6),
+                          Text('Active Field Agent', style: TextStyle(fontSize: 11, color: Colors.white)),
+                        ]),
                       ),
                     ],
                   ),
-                ),
-              );
-            }
-            final d = snap.data!;
-            final seq = d['lg_seq'] ?? d['lgSeq'] ?? widget.authState.lgSeq;
-            final status = '${d['verification_status'] ?? 'pending'}';
-            return CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(20, 80, 20, 30),
-                    decoration: const BoxDecoration(
-                      gradient: CovermintTheme.heroGradient,
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(32),
-                        bottomRight: Radius.circular(32),
+                  const SizedBox(height: 12),
+                  const Text('Lead Generator ID', style: TextStyle(fontSize: 11, color: Color(0xFFB0C8EB))),
+                  Row(
+                    children: [
+                      const Text('LG-12345', style: TextStyle(fontFamily: 'Plus Jakarta Sans', fontSize: 24, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.5)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: StitchColors.secondary.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(8)),
+                        child: const Text('Mumbai Zone', style: TextStyle(fontSize: 11, color: StitchColors.secondaryFixed)),
                       ),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.person,
-                            size: 48,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          '#$seq',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Lead Generator ID',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _statusPill(status),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      children: const [
+                        Expanded(child: Column(children: [Text('Active Leads', style: TextStyle(fontSize: 11, color: Color(0xFFB0C8EB))), SizedBox(height: 4), Text('28', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white))])),
+                        Expanded(child: Column(children: [Text('Policies', style: TextStyle(fontSize: 11, color: Color(0xFFB0C8EB))), SizedBox(height: 4), Text('14', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white))])),
+                        Expanded(child: Column(children: [Text('Monthly Target', style: TextStyle(fontSize: 11, color: Color(0xFFB0C8EB))), SizedBox(height: 4), Text('82%', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: StitchColors.tertiaryFixed))])),
                       ],
                     ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: const [
+                Text('Agent KYC & Assignment', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+                Spacer(),
+                Text('Verified Underwriter', style: TextStyle(fontSize: 11, color: StitchColors.success, backgroundColor: StitchColors.successBg)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(16), border: Border.all(color: StitchColors.slate200)),
+              child: Column(
+                children: [
+                  _kycRow(Icons.badge_outlined, 'Full Legal Name', 'Rajesh Kumar Sharma', 'Code: LG-MUM-8842'),
+                  const Divider(height: 24, color: StitchColors.slate200),
+                  _kycRow(Icons.call_outlined, 'Primary Phone', '+91 98765 43210', null, trailing: const Text('Verified', style: TextStyle(fontSize: 11, color: StitchColors.secondary))),
+                  const Divider(height: 24, color: StitchColors.slate200),
+                  Row(
+                    children: [
+                      Container(width: 40, height: 40, decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.fingerprint, color: StitchColors.secondary)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Aadhaar Identity (Govt. ID)', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+                            Row(
+                              children: [
+                                Text(_masked ? 'XXXX-XXXX-1234' : '7482-9910-1234', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface, letterSpacing: 0.5)),
+                                const Spacer(),
+                                InkWell(onTap: () => setState(() => _masked = !_masked), child: Icon(_masked ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 18, color: StitchColors.onSurfaceVariant)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24, color: StitchColors.slate200),
+                  _kycRow(Icons.mail_outline, 'Official Mail ID', 'rajesh.sharma@insurancepartners.in', null),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(12)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('REPORTING HIERARCHY', style: TextStyle(fontSize: 10, letterSpacing: 0.8, color: StitchColors.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(Icons.supervisor_account_outlined, size: 16, color: StitchColors.secondary),
+                            const SizedBox(width: 8),
+                            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Relationship Manager', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)), Text('Vikramaditya Rao', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface))])),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(8), boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 4)]),
+                              child: Row(children: const [Icon(Icons.phone, size: 14, color: StitchColors.secondary), SizedBox(width: 4), Text('Call RM', style: TextStyle(fontSize: 12, color: StitchColors.secondary, fontWeight: FontWeight.w600))]),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(children: const [Icon(Icons.verified_user_outlined, size: 16, color: StitchColors.secondary), SizedBox(width: 8), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Insurance Specified Person (ISP)', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)), Text('Amitav Banerjee', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface)), Text('Licence #ISP-9921', style: TextStyle(fontSize: 11, color: StitchColors.secondary))])]),
+                        const SizedBox(height: 12),
+                        Row(children: const [Icon(Icons.account_balance_outlined, size: 16, color: StitchColors.secondary), SizedBox(width: 8), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Principal Officer (PO)', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)), Text('Dr. Sunita Deshmukh', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface))])]),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () => context.go('/sell'),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF0A2540), Color(0xFF0A2540), Color(0xFF006591)], begin: Alignment.centerLeft, end: Alignment.centerRight),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [BoxShadow(color: Color(0x330A2540), blurRadius: 20, offset: Offset(0, 8))],
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.all(20),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildInfoCard(d),
-                      const SizedBox(height: 16),
-                      _buildSellButton(),
+                child: Row(
+                  children: [
+                    Container(width: 32, height: 32, decoration: BoxDecoration(color: StitchColors.success, shape: BoxShape.circle), child: const Center(child: Text('⚡', style: TextStyle(fontSize: 16)))),
+                    const SizedBox(width: 12),
+                    const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Sell New Insurance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)), Text('Instant quote generation', style: TextStyle(fontSize: 11, color: StitchColors.secondaryFixed))])),
+                    Container(width: 36, height: 36, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle), child: const Icon(Icons.arrow_forward, color: Colors.white, size: 18)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(12), border: Border.all(color: StitchColors.slate200)),
+                    child: Row(children: [
+                      Container(width: 32, height: 32, decoration: BoxDecoration(color: StitchColors.surfaceContainerHigh, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.history_edu_outlined, size: 16, color: StitchColors.secondary)),
+                      const SizedBox(width: 8),
+                      const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Branch Code', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)), Text('MH-MUM-04', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: StitchColors.onSurface))]),
+                    ]),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: StitchColors.surfaceLowest, borderRadius: BorderRadius.circular(12), border: Border.all(color: StitchColors.slate200)),
+                    child: Row(children: [
+                      Container(width: 32, height: 32, decoration: BoxDecoration(color: StitchColors.surfaceContainerHigh, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.workspace_premium_outlined, size: 16, color: StitchColors.success)),
+                      const SizedBox(width: 8),
+                      const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Commission Tier', style: TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)), Text('Tier 1 Platinum', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: StitchColors.onSurface))]),
                     ]),
                   ),
                 ),
               ],
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _statusPill(String status) {
-    final lower = status.toLowerCase();
-    final Color color;
-    final IconData icon;
-    if (lower == 'approved') {
-      color = CovermintTheme.approvedGreen;
-      icon = Icons.check_circle;
-    } else if (lower == 'rejected') {
-      color = CovermintTheme.rejectedRed;
-      icon = Icons.cancel;
-    } else {
-      color = CovermintTheme.pendingAmber;
-      icon = Icons.hourglass_top;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 6),
-          Text(
-            status.toUpperCase(),
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(Map<String, dynamic> d) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Personal Information',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Divider(height: 24),
-          _row('Name', d['name'], Icons.person_outline),
-          _row('Phone', d['phone'], Icons.phone_outlined),
-          _row('Email', d['email'], Icons.email_outlined),
-          _row('Aadhaar', d['aadhaar_masked'], Icons.credit_card),
-          _row(
-            'RM',
-            _join([d['rm_name'], d['rm_phone']], ' · '),
-            Icons.support_agent,
-          ),
-          _row('ISP', d['isp_name'], Icons.business),
-          _row('PO', d['po_name'], Icons.store),
-          _row(
-            'Active',
-            (d['is_active'] == true) ? 'Yes' : 'No',
-            d['is_active'] == true ? Icons.check_circle : Icons.cancel,
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _join(List<Object?> parts, String sep) {
-    final items =
-        parts.map((e) => '$e'.trim()).where((e) => e.isNotEmpty).toList();
-    return items.isEmpty ? '—' : items.join(sep);
-  }
-
-  Widget _row(String label, Object? value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: CovermintTheme.brandPrimary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(icon, size: 16, color: CovermintTheme.brandPrimary),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 70,
-            child: Text(
-              label,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              (value == null || '$value'.isEmpty) ? '—' : '$value',
-              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSellButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: FilledButton.icon(
-        onPressed: () => context.go('/sell'),
-        icon: const Icon(Icons.storefront, color: Colors.white),
-        label: const Text(
-          'Sell Insurance',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+  static Widget _kycRow(IconData icon, String label, String value, String? sub, {Widget? trailing}) {
+    return Row(
+      children: [
+        Container(width: 40, height: 40, decoration: BoxDecoration(color: StitchColors.surfaceLow, borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: StitchColors.secondary, size: 18)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: StitchColors.onSurface)),
+              if (sub != null) Text(sub, style: const TextStyle(fontSize: 11, color: StitchColors.onSurfaceVariant)),
+            ],
           ),
         ),
-        style: FilledButton.styleFrom(
-          backgroundColor: CovermintTheme.brandAccent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      ),
+        if (trailing != null) trailing,
+      ],
     );
   }
 }
